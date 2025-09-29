@@ -188,7 +188,7 @@ pokeSockAddr p (SockAddrInet port address) =
     
     -- the address (e.g. "127.0.0.1" -> [127,0,0,1] :: [Word8])
     sin_addr :: [Word8]
-    sin_addr = map read $ splitOn '.' address
+    sin_addr = take 4 $ map read $ splitOn '.' address
       where
         splitOn :: Eq a => a -> [a] -> [[a]]
         splitOn _ [] = []
