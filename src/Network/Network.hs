@@ -154,7 +154,12 @@ listen (Socket df) = do
 sendBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 sendBuf (Socket socketfd) buf len =
     throwErrnoIfMinus1 "error in send" $ do
-        CInt e <- c_send socketfd buf (CSize (fromIntegral len)) (CInt 0)
+#if defined(__GLASGOW_HASKELL__)
+        CInt e <-
+#else
+        e <-
+#endif
+            c_send socketfd buf (CSize (fromIntegral len)) (CInt 0)
         return $ fromIntegral e
 
 -- | Convenience function to transmit a String over a socket
@@ -168,7 +173,12 @@ sendString sock str =
 recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 recvBuf (Socket socketfd) buf len = do
     throwErrnoIfMinus1 "error in recv" $ do
-        CInt e <- c_recv socketfd buf (CSize (fromIntegral len)) (CInt 0)
+#if defined(__GLASGOW_HASKELL__)
+        CInt e <-
+#else
+        e <-
+#endif
+            c_recv socketfd buf (CSize (fromIntegral len)) (CInt 0)
         return $ fromIntegral e
 
 -- | Convenience function to receive a string (of a maximum length)
