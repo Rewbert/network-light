@@ -12,13 +12,14 @@ import Data.Word
 import Data.Bits
 import Data.List
 
+import Foreign.C.Error
+import Foreign.C.String
 import Foreign.C.Types
-import Foreign.Ptr
-import Foreign.Storable
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
-import Foreign.C.Error
+import Foreign.Ptr
+import Foreign.Storable
 
 foreign import ccall "sys/socket.h socket"  c_socket        :: CInt -> CInt -> CInt -> IO CInt
 foreign import ccall "sys/socket.h connect" c_connect       :: CInt -> Ptr SockAddr -> CInt -> IO CInt
@@ -148,9 +149,7 @@ sendBuf (Socket socketfd) buf len =
 -- | Convenience function to transmit a String over a socket
 sendString :: Socket -> String -> IO Int
 sendString sock str =
-    let bytes = map (fromIntegral . ord) str :: [Word8]
-    in withArray bytes $ \ptr ->
-        sendBuf sock ptr (length bytes)
+    withCAStringLen str $ \ (ptr, len) -> sendBuf sock (castPtr ptr) len
 
 -- | Receive data over a socket
 recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
@@ -163,8 +162,7 @@ recvBuf (Socket socketfd) buf len = do
 recvString :: Socket -> Int -> IO String
 recvString sock len = allocaBytes len $ \buf -> do
     n <- recvBuf sock buf len
-    bytes <- mapM (\i -> peekByteOff buf i :: IO Word8) [0 .. (n-1)]
-    return $ map (chr . fromIntegral) bytes
+    peekCAStringLen (castPtr buf, n)
 
 instance Storable SockAddr where
     sizeOf _ = 16
@@ -172,7 +170,7 @@ instance Storable SockAddr where
     peek = peekSockAddr
     poke = pokeSockAddr
 
--- | Write a SockAddr to a buffer
+-- | Write a SockAddr to memory
 pokeSockAddr :: Ptr SockAddr -> SockAddr -> IO ()
 pokeSockAddr p (SockAddrInet port address) =
     pokeArray (castPtr p) $ (sin_family ++ sin_port ++ sin_addr)
@@ -200,7 +198,7 @@ pokeSockAddr p (SockAddrInet port address) =
                             [] -> [pref]
                             (_:xs') -> pref : splitOn i xs'
 
--- | Read a SockAddr from a buffer
+-- | Read a SockAddr from memory
 peekSockAddr :: Ptr SockAddr -> IO SockAddr
 peekSockAddr p = do
     xs <- peekArray 8 (castPtr p :: Ptr Word8)
