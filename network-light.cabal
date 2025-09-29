@@ -1,13 +1,13 @@
 cabal-version:      3.0
 name:               network-light
-version:            0.1.0.0
--- synopsis:
--- description:
+version:            0.1.0.1
+synopsis:           A slimmed down version of network
+description:        A slimmed down version of network, less capable and portable.
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Robert Krook
 maintainer:         rewbert93@gmail.com
--- copyright:
+copyright:          2025 Robert Krook
 category:           Network
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
