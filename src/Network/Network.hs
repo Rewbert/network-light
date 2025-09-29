@@ -5,7 +5,6 @@ Most functions only exist as IO () variants, where in reality they might fail wi
 These variants can be trivially added.
 
 -}
-{-# LANGUAGE CPP #-}
 module Network.Network where
 
 import Data.Char
