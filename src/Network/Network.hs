@@ -5,6 +5,7 @@ Most functions only exist as IO () variants, where in reality they might fail wi
 These variants can be trivially added.
 
 -}
+{-# LANGUAGE CPP #-}
 module Network.Network where
 
 import Data.Char
@@ -17,6 +18,12 @@ import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
+import Foreign.Marshal.Utils
+import Foreign.C.Error
+
+#if defined(__GLASGOW_HASKELL__)
+type CSSize = CInt
+#endif
 
 foreign import ccall "sys/socket.h socket"  c_socket        :: CInt -> CInt -> CInt -> IO CInt
 foreign import ccall "sys/socket.h connect" c_connect       :: CInt -> Ptr SockAddr -> CInt -> IO CInt
@@ -29,51 +36,42 @@ foreign import ccall "sys/socket.h setsockopt" c_setsockopt :: CInt -> CInt -> C
 
 foreign import ccall "unistd.h     close"   c_close   :: CInt -> IO CInt
 
-foreign import ccall "errno.h      &errno"  cerrno    :: IO (Ptr CInt)
-
 -- | Socket type
 newtype Socket = Socket CInt
 
 -- | Adressing family
 data Domain
     = AF_INET -- ^ IPV4
-    | INETV6  -- ^ IPV6  -- LA: why is one AF_ and not?
     -- many more that are not added
 
 instance Enum Domain where
     toEnum 2 = AF_INET
-    toEnum 10 = INETV6
-    toEnum _ = "not added yet"  -- LA: no call to error
+    toEnum _ = error "not added yet"
 
     fromEnum AF_INET = 2
-    fromEnum INETV6 = 10
 
 -- | Stream type
 data StreamType
     = SOCK_STREAM -- ^ TCP
-    | DGRAM       -- ^ UDP
+    | SOCK_DGRAM  -- ^ UDP
     -- many more to add
 
 instance Enum StreamType where
     toEnum 1 = SOCK_STREAM
+    toEnum 2 = SOCK_DGRAM
     toEnum _ = error "not added yet"
 
     fromEnum SOCK_STREAM = 1
-    fromEnum DGRAM = error "not added yet"
+    fromEnum SOCK_DGRAM = 2
 
 -- | Socket Address type, don't expose internals of this one
-data SockAddr = SockAddrInet Int String
+data SockAddr = SockAddrInet Int String deriving (Show, Eq)
 
 {- | Create a SockAddr. If the second parameter is Nothing, the address is assumed
 to be INADDR_ANY (0.0.0.0) -}
 mkSockAddr :: Int -> Maybe String -> SockAddr
 mkSockAddr port (Just address) = SockAddrInet port address
 mkSockAddr port Nothing        = SockAddrInet port "0.0.0.0" -- INADDR_ANY
-
--- | There really should be a Storable instance instead, where we can implement the sizeOf function
--- LA: YES!!!
-sizeOfSockAddr :: Int
-sizeOfSockAddr = 16 -- 8 bytes of data, and 8 of padding
 
 -- | Socket options
 data SockOpt
@@ -89,113 +87,89 @@ instance Enum SockOpt where
 -- | Create a new socket, throwing an exception if creation failed
 socket :: Domain -> StreamType -> IO Socket
 socket d st = do
-    i <- c_socket (CInt $ fromEnum d) (CInt $ fromEnum st) 0
--- LA: Maybe use Foreign.C.Error.throwErrnoIfMinus1
-    if i < 0
-        then error "error allocating socket"
-        else return $ Socket i
+    i <- throwErrnoIfMinus1 "error allocating socket" $
+             c_socket (CInt $ fromIntegral $ fromEnum d) (CInt $ fromIntegral $ fromEnum st) 0
+    return (Socket i)
 
 -- | Set a socket option
 setsocketopt :: Socket -> SockOpt -> IO ()
 setsocketopt (Socket socketfd) so = do
     -- please see the C setsocketopt to see what the parameters are, if it is unclear
     -- (it was unclear to me first)
--- LA: instead of callocaBytes&poke use
---   with 1 $ \ p -> ...
-    callocaBytes (sizeOf (undefined :: CInt)) $ \p -> do
-        poke (castPtr p) (1 :: CInt)
-        CInt e <- c_setsockopt socketfd (CInt 1 {- SOL_SOCKET = 1 -}) (CInt $ fromEnum so) p (CInt (sizeOf (undefined :: CInt)))
--- LA: use Foreign.C.Error.throwErrnoIfMinus1
-        if e == -1
-            then do c <- errno
-                    error $ "error in setsocketopt, errno is " ++ show c
-            else return ()
+    with (1 :: Word8) $ \p -> do
+        _ <- throwErrnoIfMinus1 "error in setsocketopt" $ do
+                c_setsockopt socketfd (CInt 1 {- SOL_SOCKET = 1 -}) (CInt $ fromIntegral $ fromEnum so) p (CInt $ fromIntegral (sizeOf (undefined :: CInt)))
+        return ()
 
 -- | Close a socket
 close :: Socket -> IO ()
 close (Socket fd@(CInt fd')) = do
-    CInt c <- c_close fd
--- LA: use Foreign.C.Error.throwErrnoIfMinus1
-    if c < 0
-        then do c <- errno
-                error $ "error closing socket " ++ show fd' ++ ", errno is " ++ show c
-        else return ()
+    _ <- throwErrnoIfMinus1 ("error closing socket " ++ show fd') $ do
+            c_close fd
+    return ()
 
 -- | Establish a connection
 connect :: Socket -> SockAddr -> IO ()
 connect (Socket socketfd) sockaddr =
-    withSockAddr sockaddr $ \p -> do
-        CInt e <- c_connect socketfd p (CInt sizeOfSockAddr)
--- LA: use Foreign.C.Error.throwErrnoIfMinus1
-        if e < 0
-            then do c <- errno
-                    error $ "error in connect, errno is " ++ show c
-            else return ()
+    with sockaddr $ \p -> do
+        _ <- throwErrnoIfMinus1 "error in connect" $ do
+                c_connect socketfd p (CInt $ fromIntegral $ sizeOf sockaddr)
+        return ()
 
 -- | Establish a connection, returning a Bool to indicate whether the action was successful
 connect' :: Socket -> SockAddr -> IO Bool
 connect' (Socket socketfd) sockaddr =
-    withSockAddr sockaddr $ \p -> do
-        CInt e <- c_connect socketfd p (CInt sizeOfSockAddr)
+    with sockaddr $ \p -> do
+        CInt e <- c_connect socketfd p (CInt $ fromIntegral $ sizeOf sockaddr)
         return $ e >= 0
 
 -- | Bind a socket to a SockAddr
 bind :: Socket -> SockAddr -> IO ()
 bind (Socket socketfd) sockaddr =
-    withSockAddr sockaddr $ \p -> do
-        CInt e <- c_bind socketfd p (CInt sizeOfSockAddr)
-        if e < 0
-            then do c <- errno
-                    error $ "error in bind, errno is " ++ show c
-            else return ()
+    with sockaddr $ \p -> do
+        _ <- throwErrnoIfNegative "error in bind" $ do
+                c_bind socketfd p (CInt (fromIntegral $ sizeOf sockaddr))
+        return ()
 
 -- | Accept an incoming connection request
 accept :: Socket -> IO (Socket, SockAddr)
 accept (Socket server_fd) = do
-    allocaBytes sizeOfSockAddr $ \p ->
+    allocaBytes (sizeOf (undefined :: SockAddr)) $ \p ->
         allocaBytes 4 $ \p_size -> do
-            poke p_size 16  -- LA: 16??
+            poke p_size 16
 
-            CInt e <- c_accept server_fd p p_size
-            if e < 0
-                then do c <- errno
-                        error $ "error in accept, errno is " ++ show c
-                else do sockaddr <- peekSockAddr p
-                        return (Socket (CInt e), sockaddr)
+            CInt e <- throwErrnoIfNegative "error in accept" $
+                c_accept server_fd p p_size
+            sockaddr <- peekSockAddr p
+            return (Socket (CInt e), sockaddr)
 
 -- | Set a socket to listening mode
 listen :: Socket -> IO ()
 listen (Socket df) = do
-    CInt e <- c_listen df (CInt 1)
-    if e < 0
-        then do c <- errno
-                error $ "error in listen, errno is " ++ show c
-        else return ()
+    _ <- throwErrnoIfNegative "error in listen" $
+            c_listen df (CInt 1)
+    return ()
 
 -- | Send a buffer of data over a socket
 sendBuf :: Socket -> Ptr Word8 -> Int -> IO Int
-sendBuf (Socket socketfd) buf len = do
-    CSSize e <- c_send socketfd buf (CSize (fromIntegral len)) (CInt 0)
-    if e == -1
-        then do c <- errno
-                error $ "error in send, errno is " ++ show c
-        else return e
+sendBuf (Socket socketfd) buf len =
+    throwErrnoIfMinus1 "error in send" $ do
+        CInt e <- c_send socketfd buf (CSize (fromIntegral len)) (CInt 0)
+        return $ fromIntegral e
 
 -- | Convenience function to transmit a String over a socket
 sendString :: Socket -> String -> IO Int
-sendString socket str =
+sendString sock str =
     let bytes = map (fromIntegral . ord) str :: [Word8]
     in withArray bytes $ \ptr ->
-        sendBuf socket ptr (length bytes)
+        sendBuf sock ptr (length bytes)
 
 -- | Receive data over a socket
 recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 recvBuf (Socket socketfd) buf len = do
-    CSSize e <- c_recv socketfd buf (CSize (fromIntegral len)) (CInt 0)
-    if e == -1
-        then do c <- errno
-                error $ "error in recv, errno is " ++ show c
-        else return e
+    throwErrnoIfMinus1 "error in recv" $ do
+        CInt e <- c_recv socketfd buf (CSize (fromIntegral len)) (CInt 0)
+        return $ fromIntegral e
 
 -- | Convenience function to receive a string (of a maximum length)
 recvString :: Socket -> Int -> IO String
@@ -204,27 +178,23 @@ recvString sock len = allocaBytes len $ \buf -> do
     bytes <- mapM (\i -> peekByteOff buf i :: IO Word8) [0 .. (n-1)]
     return $ map (chr . fromIntegral) bytes
 
-{- | Socket functions require a pointer to a SockAddr, and this function takes a SockAddr and
-a such a function, and turns the SockAddr into a 'pointable' value (by writing it to the heap). -}
--- LA: make Storable SockAddr and this is just 'with'
-withSockAddr :: SockAddr -> (Ptr SockAddr -> IO a) -> IO a
-withSockAddr sockaddr f =
-    callocaBytes sizeOfSockAddr $ \p -> do
-        pokeSockAddr p sockaddr
-        f (castPtr p)
+instance Storable SockAddr where
+    sizeOf _ = 16
+    alignment _ = 16 -- ?
+    peek = peekSockAddr
+    poke = pokeSockAddr
+
+callocaBytes :: Int -> (Ptr a -> IO b) -> IO b
+callocaBytes s f = do
+    p <- callocBytes s
+    b <- f p
+    free p
+    return b
 
 -- | Write a SockAddr to a buffer
-pokeSockAddr :: Ptr Word8 -> SockAddr -> IO ()
-pokeSockAddr p (SockAddrInet port address) = do
-    -- write AF_INET = 2 to sin_family
-  -- LA: consider Foreign.Marshal.Array.pokeArray instead
-    mapM_ (\(i, b) -> pokeByteOff p i b) (zip [0..] sin_family)
-
-    -- write port to sin_port
-    mapM_ (\(i, b) -> pokeByteOff p i b) (zip [2..] sin_port)
-
-    -- write address to sin_addr
-    mapM_ (\(i, b) -> pokeByteOff p i b) (zip [4..] sin_addr)
+pokeSockAddr :: Ptr SockAddr -> SockAddr -> IO ()
+pokeSockAddr p (SockAddrInet port address) =
+    pokeArray (castPtr p) $ (sin_family ++ sin_port ++ sin_addr)
   where
     -- hard-coded AF_INET for now
     sin_family :: [Word8]
@@ -256,26 +226,18 @@ peekSockAddr p =
     let p' :: Ptr Word8
         p' = castPtr p
     in do
-  -- LA: consider Foreign.Marshal.Array.peekArray instead
-        sin_family <- mapM ((peekByteOff :: Ptr Word8 -> Int -> IO Word8) p') [0,1]
+        xs <- peekArray 8 p'
+        case xs of
+            _:_:high:low:sin_addr -> do
+                let w16     =  (fromIntegral high `shiftL` 8) .|. fromIntegral low :: Word16
+                    port    = fromIntegral w16 :: Int
+                    address = intercalate "." $ map show sin_addr
+                return $ SockAddrInet port address
+            _ -> error "somehow wrong format lmao"
 
-        sin_port <- mapM ((peekByteOff :: Ptr Word8 -> Int -> IO Word8) p') [2,3]
-
-        sin_addr <- mapM ((peekByteOff :: Ptr Word8 -> Int -> IO Word8) p') [4,5,6,7]
-
-  -- LA: this is completely bogus
-        let [high, low] = sin_port
-            high16      = (0xFFFF .&. high) `shiftL` 16
-            low16       =  0xFFFF .&. low
-            w16         =  high16 .&. low16
-            port        = fromIntegral w16 :: Int
-            address = intercalate "." $ map show sin_addr
-        return $ SockAddrInet port address
-
--- LA: no need for this if you use Foreign.C.Error
--- | The current Errno
-errno :: IO Int
-errno = do
-    p <- cerrno
-    CInt i <- peek p
-    return i
+throwErrnoIfNegative :: (Ord a, Num a) => String -> IO a -> IO a
+throwErrnoIfNegative str act = do
+    r <- act
+    if r < 0
+        then error str
+        else return r
