@@ -7,7 +7,6 @@ These variants can be trivially added.
 -}
 module Network.Network where
 
-import Data.Char
 import Data.Word
 import Data.Bits
 import Data.List
@@ -144,7 +143,7 @@ sendBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 sendBuf (Socket socketfd) buf len =
     throwErrnoIfMinus1 "send" $ do
         CInt e <- c_send socketfd buf (CSize $ fromIntegral len) (CInt 0)
-        return e
+        return $ fromIntegral e
 
 -- | Convenience function to transmit a String over a socket
 sendString :: Socket -> String -> IO Int
@@ -156,7 +155,7 @@ recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 recvBuf (Socket socketfd) buf len = do
     throwErrnoIfMinus1 "recv" $ do
         CInt e <- c_recv socketfd buf (CSize $ fromIntegral len) (CInt 0)
-        return e
+        return $ fromIntegral e
 
 -- | Convenience function to receive a string (of a maximum length)
 recvString :: Socket -> Int -> IO String
@@ -210,7 +209,7 @@ peekSockAddr p = do
         _ -> undefined
 
 cSizeOf :: (Storable a) => a -> CInt
-cSizeOf = CInt . sizeOf
+cSizeOf = CInt . fromIntegral . sizeOf
 
 cFromEnum :: (Enum a) => a -> CInt
-cFromEnum = CInt . fromEnum
+cFromEnum = CInt . fromIntegral . fromEnum
