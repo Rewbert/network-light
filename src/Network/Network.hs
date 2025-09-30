@@ -71,13 +71,10 @@ mkSockAddr port Nothing        = SockAddrInet port "0.0.0.0" -- INADDR_ANY
 -- | Socket options
 data SockOpt
     = SO_REUSEADDR -- ^ Allow reuse of local addresses
-    -- and many more to add, I just need this one for my specific application
-
-instance Enum SockOpt where
-    toEnum 2 = SO_REUSEADDR
-    toEnum _ = error "SockOpt.toEnum unimplemented"
-
-    fromEnum SO_REUSEADDR = 2
+    | SO_DEBUG
+    | SO_TYPE
+    -- and many more to add ... please contribute, whoever is reading this.
+    -- Add the definition here and semantics in setsocketopt
 
 -- | Create a new socket, throwing an exception if creation failed
 socket :: Domain -> StreamType -> IO Socket
@@ -87,13 +84,17 @@ socket d st = do
     return (Socket i)
 
 -- | Set a socket option
-setsocketopt :: Socket -> SockOpt -> IO ()
-setsocketopt (Socket socketfd) so = do
+setsocketopt :: Socket -> SockOpt -> Int -> IO ()
+setsocketopt (Socket socketfd) so value = do
     -- please see the C setsocketopt to see what the parameters are, if it is unclear
     -- (it was unclear to me first)
-    with (1 :: Word8) $ \p -> do
+    with (fromIntegral value :: Word8) $ \p -> do
         throwErrnoIfMinus1_ "setsocketopt" $
-            c_setsockopt socketfd (CInt 1 {- SOL_SOCKET = 1 -}) (cFromEnum so) p (cSizeOf (0 :: CInt))
+            let (option, level) = case so of
+                  SO_REUSEADDR -> (CInt 2, CInt 1)
+                  SO_DEBUG     -> (CInt 1, CInt 1)
+                  SO_TYPE      -> (CInt 3, CInt 1)
+            in c_setsockopt socketfd level option p (cSizeOf (0 :: CInt))
 
 -- | Close a socket
 close :: Socket -> IO ()
