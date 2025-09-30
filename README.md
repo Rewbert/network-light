@@ -2,6 +2,7 @@ This package, `network-light`, implements a small subset of the functionality in
 You can write code that uses TCP/UDP sockets, adressable via IPV4, and send or read data over them. Some socket options can be configured, but please contribute and add more options if you need one that is not added yet.
 
 It is meant to be small, low on dependencies, self contained, and most importantly, easily compilable by MicroHaskell.
+Please contribute, but keep it in a similar style (light weight, simple).
 
 Here is an example client/server.
 
