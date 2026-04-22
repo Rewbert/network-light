@@ -8,7 +8,7 @@ import Foreign.Storable
 
 import System.Exit
 
-import Network.Network
+import System.Network.Types
 
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
