@@ -173,6 +173,8 @@ accept (Socket serverFd) =
         r <- c_accept serverFd p pSize
         if r /= -1
           then do addr <- peek p
+                  throwErrnoIfMinus1_ "accept/setnonblock" $
+                      c_fcntl r f_SETFL o_NONBLOCK
                   return (Socket r, addr)
           else do errno <- getErrno
                   if errno == eAGAIN || errno == eWOULDBLOCK

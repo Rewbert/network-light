@@ -46,7 +46,7 @@ instance Enum StreamType where
     fromEnum SOCK_DGRAM  = 2
 
 -- | Socket address.  Internals are intentionally opaque to callers.
-data SockAddr = SockAddrInet Int String deriving (Show, Eq)
+data SockAddr = SockAddrInet Int String deriving (Show, Read, Ord, Eq)
 
 -- | Construct a 'SockAddr'.  Pass 'Nothing' for the address to get
 -- @INADDR_ANY@ (@0.0.0.0@).
