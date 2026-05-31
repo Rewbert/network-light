@@ -21,7 +21,7 @@ compute fcn arg = do
   fd <- socket AF_INET SOCK_STREAM
   connect fd (mkSockAddr 9900 (Just "127.0.0.1"))
   sendByteString fd secretBS
-  outbs <- writeSerializedBS (fcn, arg)
+  outbs <- writeSerializedCompressedBS (fcn, arg)
   putStrLn $ "send: " ++ show (BS.length outbs)
   sendByteString fd outbs
   inbs <- recvByteString fd 100000
@@ -34,10 +34,10 @@ main :: IO ()
 main = do
   args <- getArgs
   let n = case args of s:_ -> read s; _ -> 10
-  print $ "arg=" ++ show n
+  putStrLn $ "arg=" ++ show n
   t1 <- getTimeMilli
-  compute nfib n >>= print
-  t2 <- getTimeMilli
   print (nfib n)
+  t2 <- getTimeMilli
+  compute nfib n >>= print
   t3 <- getTimeMilli
-  printf "local %f\nremote %f\n" (fromIntegral (t3-t2) / 1000) (fromIntegral (t2-t1) / 1000)
+  printf "local %f\nremote %f\n" (fromIntegral (t2-t1) / 1000) (fromIntegral (t3-t2) / 1000)

@@ -26,9 +26,8 @@ serve sfd = do
     inbs <- recvByteString fd 100000
     putStrLn $ "recv " ++ show (BS.length inbs)
     (fcn, arg) <- readSerializedBS inbs :: IO (Any -> Any, Any)
-    cprint arg
-    let res = fcn arg
-    outbs <- writeSerializedBS (seq res res)
+    --cprint arg
+    outbs <- writeSerializedCompressedBS $! fcn arg
     putStrLn $ "send " ++ show (BS.length outbs)
     sendByteString fd outbs
     return ()
