@@ -190,10 +190,10 @@ accept (Socket serverFd) =
 #endif
 
 -- | Set the socket to listening mode.
-listen :: Socket -> IO ()
-listen (Socket fd) =
+listen :: Socket -> Int -> IO ()
+listen (Socket fd) n =
     throwErrnoIfMinus1_ "listen" $
-        c_listen fd (CInt 1)
+        c_listen fd (fromIntegral n)
 
 -- | Send raw bytes.  Returns the number of bytes actually sent.
 sendBuf :: Socket -> Ptr Word8 -> Int -> IO Int
