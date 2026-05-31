@@ -113,7 +113,6 @@ setsocketopt (Socket fd) so value =
                   SO_REUSEADDR -> (sO_REUSEADDR, sOL_SOCKET)
                   SO_DEBUG     -> (sO_DEBUG,     sOL_SOCKET)
                   SO_TYPE      -> (sO_TYPE,      sOL_SOCKET)
-            putStrLn $ "setsocketopt " ++ show (fd, level, option, opt, (cSizeOf (0 :: CInt)))
             c_setsockopt fd level option opt (cSizeOf (0 :: CInt))
 
 -- | Close a socket.
