@@ -45,25 +45,24 @@ import System.Network.Types
 -- FFI
 -- ---------------------------------------------------------------------------
 
-foreign import ccall "sys/socket.h socket" c_socket :: CInt -> CInt -> CInt -> IO CInt
-foreign import ccall "sys/socket.h connect" c_connect :: CInt -> Ptr SockAddr -> CInt -> IO CInt
-foreign import ccall "sys/socket.h bind" c_bind :: CInt -> Ptr SockAddr -> CInt -> IO CInt
-foreign import ccall "sys/socket.h accept" c_accept :: CInt -> Ptr SockAddr -> Ptr CInt -> IO CInt
-foreign import ccall "sys/socket.h listen" c_listen :: CInt -> CInt -> IO CInt
-foreign import ccall "sys/socket.h send" c_send :: CInt -> Ptr Word8 -> CSize -> CInt -> IO CInt
-foreign import ccall "sys/socket.h recv" c_recv :: CInt -> Ptr Word8 -> CSize -> CInt -> IO CInt
-foreign import ccall "sys/socket.h setsockopt" c_setsockopt :: CInt -> CInt -> CInt -> Ptr Word8 -> CInt -> IO CInt
-foreign import ccall "unistd.h close" c_close :: CInt -> IO CInt
+type FD = CInt
+
+foreign import ccall "sys/socket.h socket"     c_socket     :: CInt -> CInt -> CInt -> IO FD
+foreign import ccall "sys/socket.h connect"    c_connect    :: FD   -> Ptr SockAddr -> CInt -> IO CInt
+foreign import ccall "sys/socket.h bind"       c_bind       :: FD   -> Ptr SockAddr -> CInt -> IO CInt
+foreign import ccall "sys/socket.h accept"     c_accept     :: FD   -> Ptr SockAddr -> Ptr CInt -> IO FD
+foreign import ccall "sys/socket.h listen"     c_listen     :: FD   -> CInt -> IO CInt
+foreign import ccall "sys/socket.h send"       c_send       :: FD   -> Ptr Word8 -> CSize -> CInt -> IO CInt
+foreign import ccall "sys/socket.h recv"       c_recv       :: FD   -> Ptr Word8 -> CSize -> CInt -> IO CInt
+foreign import ccall "sys/socket.h setsockopt" c_setsockopt :: FD   -> CInt -> CInt -> Ptr CInt -> CInt -> IO CInt
+foreign import ccall "unistd.h close"          c_close      :: FD   -> IO CInt
 
 #ifdef __MHS__
 foreign import ccall "fcntl.h fcntl" c_fcntl :: CInt -> CInt -> CInt -> IO CInt
 foreign import ccall "sys/socket.h getsockopt" c_getsockopt :: CInt -> CInt -> CInt -> Ptr CInt -> Ptr CInt -> IO CInt
 
-f_SETFL :: CInt
-f_SETFL    = 4     -- F_SETFL
-
-o_NONBLOCK :: CInt
-o_NONBLOCK = 2048  -- O_NONBLOCK (0x800, Linux), wonderful magic number
+foreign import ccall "fcntl.h value F_SETFL"    f_SETFL :: CInt
+foreign import ccall "fcntl.h value O_NONBLOCK" o_NONBLOCK :: CInt
 
 fdInt :: CInt -> Int
 fdInt = fromIntegral
@@ -76,6 +75,12 @@ peekSockError fd =
         _ <- c_getsockopt fd 1 4 errPtr lenPtr
         peek errPtr
 #endif
+
+foreign import ccall "sys/socket.h value SOL_SOCKET"   sOL_SOCKET   :: CInt
+foreign import ccall "sys/socket.h value SO_REUSEADDR" sO_REUSEADDR :: CInt
+foreign import ccall "sys/socket.h value SO_DEBUG"     sO_DEBUG     :: CInt
+foreign import ccall "sys/socket.h value SO_TYPE"      sO_TYPE      :: CInt
+
 
 -- ---------------------------------------------------------------------------
 -- Operations
@@ -102,13 +107,14 @@ setsocketopt (Socket fd) O_NONBLOCK _ =
 setsocketopt _ O_NONBLOCK _ = return () -- sockets created via GHC already have this setting from the IO manager?
 #endif
 setsocketopt (Socket fd) so value =
-    with (fromIntegral value :: Word8) $ \p ->
-        throwErrnoIfMinus1_ "setsocketopt" $
+    with (fromIntegral value :: CInt) $ \ opt ->
+        throwErrnoIfMinus1_ "setsocketopt" $ do
             let (option, level) = case so of
-                  SO_REUSEADDR -> (CInt 2, CInt 1)
-                  SO_DEBUG     -> (CInt 1, CInt 1)
-                  SO_TYPE      -> (CInt 3, CInt 1)
-            in c_setsockopt fd level option p (cSizeOf (0 :: CInt))
+                  SO_REUSEADDR -> (sO_REUSEADDR, sOL_SOCKET)
+                  SO_DEBUG     -> (sO_DEBUG,     sOL_SOCKET)
+                  SO_TYPE      -> (sO_TYPE,      sOL_SOCKET)
+            putStrLn $ "setsocketopt " ++ show (fd, level, option, opt, (cSizeOf (0 :: CInt)))
+            c_setsockopt fd level option opt (cSizeOf (0 :: CInt))
 
 -- | Close a socket.
 close :: Socket -> IO ()
