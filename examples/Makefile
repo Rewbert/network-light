@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-all:	server client
+all:	server client serverap clientap
 
 server: Server.hs
 	mhs Server -o server
@@ -8,5 +8,11 @@ server: Server.hs
 client: Client.hs
 	mhs Client -o client
 
+serverap: ServerApply.hs
+	mhs ServerApply -o serverap
+
+clientap: ClientApply.hs
+	mhs ClientApply -o clientap
+
 clean:
-	rm -rf server client *~
+	rm -rf server client serverap clientap *~

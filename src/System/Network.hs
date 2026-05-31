@@ -21,10 +21,13 @@ module System.Network
     , listen
     , sendBuf
     , sendString
+    , sendByteString
     , recvBuf
     , recvString
+    , recvByteString
     ) where
 
+import qualified Data.ByteString as BS
 import Data.Word
 
 #ifdef __MHS__
@@ -225,6 +228,12 @@ sendString sock str =
     withCAStringLen str $ \(ptr, len) ->
         sendBuf sock (castPtr ptr) len
 
+-- | Send a 'ByteString' over a socket.
+sendByteString :: Socket -> BS.ByteString -> IO Int
+sendByteString sock bs =
+    BS.useAsCStringLen bs $ \(ptr, len) ->
+        sendBuf sock (castPtr ptr) len
+
 -- | Receive raw bytes into an existing buffer.  Returns byte count.
 recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 #ifdef __MHS__
@@ -250,3 +259,10 @@ recvString sock maxLen =
     allocaBytes maxLen $ \buf -> do
         n <- recvBuf sock buf maxLen
         peekCAStringLen (castPtr buf, n)
+
+-- | Receive up to @maxLen@ bytes and decode as a 'ByteString'.
+recvByteString :: Socket -> Int -> IO BS.ByteString
+recvByteString sock maxLen =
+    allocaBytes maxLen $ \buf -> do
+        n <- recvBuf sock buf maxLen
+        BS.packCStringLen (castPtr buf, n)
