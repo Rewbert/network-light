@@ -1,6 +1,7 @@
 module Client where
 import System.Network
 import System.Environment
+import Secret
 
 main :: IO ()
 main = do
@@ -9,6 +10,7 @@ main = do
           | otherwise = unwords args
   fd <- socket AF_INET SOCK_STREAM
   connect fd (mkSockAddr 9900 (Just "127.0.0.1"))
+  sendString fd secret
   putStrLn $ "Sending: " ++ msg
   sendString fd msg
   str <- recvString fd 1000
