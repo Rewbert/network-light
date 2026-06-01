@@ -75,7 +75,7 @@ peekSockError :: CInt -> IO CInt
 peekSockError fd =
     alloca $ \errPtr -> alloca $ \lenPtr -> do
         poke lenPtr (cSizeOf (0 :: CInt))
-        _ <- c_getsockopt fd 1 4 errPtr lenPtr
+        _ <- c_getsockopt fd sOL_SOCKET sO_ERROR errPtr lenPtr
         peek errPtr
 #endif
 
@@ -83,6 +83,7 @@ foreign import ccall "sys/socket.h value SOL_SOCKET"   sOL_SOCKET   :: CInt
 foreign import ccall "sys/socket.h value SO_REUSEADDR" sO_REUSEADDR :: CInt
 foreign import ccall "sys/socket.h value SO_DEBUG"     sO_DEBUG     :: CInt
 foreign import ccall "sys/socket.h value SO_TYPE"      sO_TYPE      :: CInt
+foreign import ccall "sys/socket.h value SO_ERROR"     sO_ERROR     :: CInt
 
 
 -- ---------------------------------------------------------------------------
@@ -135,7 +136,11 @@ connect (Socket fd) sockaddr =
             if errno == eINPROGRESS
               then do waitForWriteFD (fdInt fd)
                       err <- peekSockError fd
-                      if err /= 0 then throwErrno "connect" else return ()
+                      if err /= 0 then do
+                        setErrno (Errno err)
+                        throwErrno "connect"
+                      else
+                        return ()
               else throwErrno "connect"
 #else
     with sockaddr $ \p ->
