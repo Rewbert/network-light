@@ -3,6 +3,7 @@ import qualified Data.ByteString.Char8 as BS
 import Data.Any
 import System.IO.Serialize
 import System.Network
+import Packet
 import Secret
 
 secretBS :: BS.ByteString
@@ -23,13 +24,13 @@ serve sfd = do
   putStrLn $ "got connection " ++ show addr
   sec <- recvByteString fd (length secret)
   if (sec == secretBS) then do
-    inbs <- recvByteString fd 100000
+    inbs <- recvBS fd
     putStrLn $ "recv " ++ show (BS.length inbs)
     (fcn, arg) <- readSerializedBS inbs :: IO (Any -> Any, Any)
     --cprint arg
     outbs <- writeSerializedCompressedBS $! fcn arg
     putStrLn $ "send " ++ show (BS.length outbs)
-    sendByteString fd outbs
+    sendBS fd outbs
     return ()
    else do
     putStrLn "bad secret"

@@ -5,6 +5,7 @@ import System.Network
 import System.IO.Serialize
 import System.IO.TimeMilli
 import Text.Printf
+import Packet
 import Secret
 
 secretBS :: BS.ByteString
@@ -23,8 +24,8 @@ compute fcn arg = do
   sendByteString fd secretBS
   outbs <- writeSerializedCompressedBS (fcn, arg)
   putStrLn $ "send: " ++ show (BS.length outbs)
-  sendByteString fd outbs
-  inbs <- recvByteString fd 100000
+  sendBS fd outbs
+  inbs <- recvBS fd
   putStrLn $ "recv: " ++ show (BS.length inbs)
   res <- readSerializedBS inbs
   close fd
