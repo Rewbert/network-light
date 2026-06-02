@@ -20,14 +20,17 @@ module System.Network
     , accept
     , listen
     , sendBuf
+    , sendBufFull
     , sendString
     , sendByteString
     , recvBuf
     , recvString
     , recvByteString
+    , recvByteStringFull
     ) where
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Unsafe as BS
 import Data.Word
 
 #ifdef __MHS__
@@ -227,6 +230,13 @@ sendBuf (Socket fd) buf len =
         return (fromIntegral n)
 #endif
 
+-- | Send raw bytes.  Sends the total number of bytes.
+sendBufFull :: Socket -> Ptr Word8 -> Int -> IO ()
+sendBufFull sock ptr len | len == 0 = return ()
+                         | otherwise = do
+    n <- sendBuf sock ptr len
+    sendBufFull sock (plusPtr ptr n) (len - n)
+
 -- | Send a 'String' over a socket.
 sendString :: Socket -> String -> IO Int
 sendString sock str =
@@ -234,10 +244,10 @@ sendString sock str =
         sendBuf sock (castPtr ptr) len
 
 -- | Send a 'ByteString' over a socket.
-sendByteString :: Socket -> BS.ByteString -> IO Int
+sendByteString :: Socket -> BS.ByteString -> IO ()
 sendByteString sock bs =
-    BS.useAsCStringLen bs $ \(ptr, len) ->
-        sendBuf sock (castPtr ptr) len
+    BS.unsafeUseAsCStringLen bs $ \ (ptr, len) ->
+        sendBufFull sock (castPtr ptr) len
 
 -- | Receive raw bytes into an existing buffer.  Returns byte count.
 recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
@@ -258,6 +268,13 @@ recvBuf (Socket fd) buf len =
         return (fromIntegral n)
 #endif
 
+-- | Receive raw bytes into an existing buffer.  Receives the total number of bytes
+recvBufFull :: Socket -> Ptr Word8 -> Int -> IO ()
+recvBufFull sock ptr len | len == 0 = return ()
+                         | otherwise = do
+    n <- recvBuf sock ptr len
+    recvBufFull sock (plusPtr ptr n) (len - n)
+
 -- | Receive up to @maxLen@ bytes and decode as a 'String'.
 recvString :: Socket -> Int -> IO String
 recvString sock maxLen =
@@ -271,3 +288,10 @@ recvByteString sock maxLen =
     allocaBytes maxLen $ \buf -> do
         n <- recvBuf sock buf maxLen
         BS.packCStringLen (castPtr buf, n)
+
+-- | Receive exactly @len@ bytes and decode as a 'ByteString'.
+recvByteStringFull :: Socket -> Int -> IO BS.ByteString
+recvByteStringFull sock len = do
+    buf <- mallocBytes len
+    recvBufFull sock buf len
+    BS.unsafePackMallocCStringLen (castPtr buf) len

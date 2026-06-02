@@ -22,6 +22,7 @@ import Foreign.Storable
 
 -- | A socket file descriptor.
 newtype Socket = Socket CInt
+  deriving (Eq, Ord, Show)
 
 -- | Addressing family.
 data Domain
