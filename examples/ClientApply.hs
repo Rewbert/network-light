@@ -22,7 +22,8 @@ compute fcn arg = do
   fd <- socket AF_INET SOCK_STREAM
   connect fd (mkSockAddr 9900 (Just "127.0.0.1"))
   sendByteString fd secretBS
-  outbs <- writeSerializedCompressedBS (fcn, arg)
+  outbs <- fcn `seq` arg `seq`
+           writeSerializedCompressedBS (fcn, arg)
   putStrLn $ "send: " ++ show (BS.length outbs)
   sendBS fd outbs
   inbs <- recvBS fd

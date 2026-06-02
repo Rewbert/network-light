@@ -11,17 +11,13 @@ sendBS s bs = do
       (q2, r2) = quotRem q3 256
       (r0, r1) = quotRem q2 256
       len = BS.pack $ map fromIntegral [r0, r1, r2, r3]
-  putStrLn $ "send len=" ++ show len
   sendByteString s len
   sendByteString s bs
 
 -- Receive a ByteString, preceded by its length in 32 bits, network byte order.
 recvBS :: Socket -> IO (BS.ByteString)
 recvBS s = do
-  putStrLn $ "enter recvBS " ++ show s
   len <- recvByteStringFull s 4
-  putStrLn $ "recv len=" ++ show len
   let [r0, r1, r2, r3] = map fromIntegral $ BS.unpack len
       l = (((r0 * 256) + r1) * 256 + r2) * 256 + r3
-  putStrLn $ "recv l=" ++ show l
   recvByteStringFull s l
