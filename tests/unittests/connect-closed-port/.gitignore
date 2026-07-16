@@ -1,0 +1,6 @@
+throws
+safe
+dist-ghc
+*.hi
+*.o
+*.out

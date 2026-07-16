@@ -1,0 +1,5 @@
+server
+dist-ghc
+*.hi
+*.o
+*.out

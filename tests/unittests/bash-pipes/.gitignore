@@ -1,0 +1,5 @@
+upper
+countlines
+dist-ghc
+*.hi
+*.o

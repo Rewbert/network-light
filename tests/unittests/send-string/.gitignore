@@ -1,0 +1,6 @@
+server
+client
+dist-ghc
+*.hi
+*.o
+*.out
