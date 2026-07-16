@@ -37,10 +37,9 @@ import Foreign.Storable
 newtype Socket = Socket CInt
   deriving (Eq, Ord, Show)
 
--- | Addressing family.
+-- | The domain models addressing families. Only IPv4 is support right now, but more can easily be added.
 data Domain
     = AF_INET -- ^ IPv4
-    -- more families can be added here
 
 instance Enum Domain where
 #if defined(ZEPHYR)
@@ -53,7 +52,7 @@ instance Enum Domain where
     fromEnum AF_INET = 2
 #endif
 
--- | Socket stream type.
+-- | The stream type used by a socket
 data StreamType
     = SOCK_STREAM -- ^ TCP
     | SOCK_DGRAM  -- ^ UDP
@@ -65,21 +64,33 @@ instance Enum StreamType where
     fromEnum SOCK_STREAM = 1
     fromEnum SOCK_DGRAM  = 2
 
--- | Socket address.  Internals are intentionally opaque to callers.
+{- | Socket address.  Internals are intentionally opaque to callers.
+Create values of this type via 'mkSockAddr'.-}
 data SockAddr = SockAddrInet Int String deriving (Show, Read, Ord, Eq)
 
--- | Construct a 'SockAddr'.  Pass 'Nothing' for the address to get
--- @INADDR_ANY@ (@0.0.0.0@).
+{- | Construct a 'SockAddr' from a port and an address. E.g. to create a socket to
+target localhost, post 3232, you call @mkSockAddr 3232 "127.0.0.1"@.
+
+Pass 'Nothing' for the address to get @INADDR_ANY@ (@0.0.0.0@). -}
 mkSockAddr :: Int -> Maybe String -> SockAddr
 mkSockAddr port (Just address) = SockAddrInet port address
 mkSockAddr port Nothing        = SockAddrInet port "0.0.0.0"
 
 -- | Socket options for use with @setsocketopt@.
 data SockOpt
-    = SO_REUSEADDR
-    | SO_DEBUG
-    | SO_TYPE
-    | O_NONBLOCK
+    = SO_REUSEADDR -- ^ Allow binding to a local address left in @TIME_WAIT@
+                   --   by a previous socket, so a restarted listener does not
+                   --   fail with @EADDRINUSE@.
+    | SO_DEBUG     -- ^ Enable kernel-level debug tracing for the socket.
+    | SO_TYPE      -- ^ The socket's type (e.g. @SOCK_STREAM@ vs
+                   --   @SOCK_DGRAM@). Note: this is a get-only option on
+                   --   POSIX; passing it to 'setsocketopt' is not meaningful
+                   --   and will typically fail.
+    | O_NONBLOCK   -- ^ Put the socket into non-blocking mode. Not a
+                   --   @SOL_SOCKET@ option: 'setsocketopt' special-cases it,
+                   --   applying it via @fcntl@\/@F_SETFL@ on the MHS runtime
+                   --   and treating it as a no-op under GHC, whose IO manager
+                   --   already runs sockets non-blocking.
 
 -- ---------------------------------------------------------------------------
 -- Storable SockAddr

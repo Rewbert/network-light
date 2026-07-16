@@ -1,17 +1,32 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE CApiFFI #-}
-{- | Non-blocking socket interface.
+{- | This module exports everything you need to engage with network-light. The
+API is, in many places, similar to that of the standard Network package. However, this
+package is smaller and works with both MicroHs and GHC. It is not intended to replace
+or improve upon network, but is rather deliberately kept simple.
 
-Under mhs, sockets are set to O_NONBLOCK at creation time and all
-blocking operations yield the green thread (via 'System.IO.FD') instead
-of blocking the OS thread.
+It exports a basic API to create and use sockets, and some helper functions that
+send and receive ByteString.
 
-Under GHC, the runtime's I/O manager provides equivalent behaviour
-transparently, so this module falls back to ordinary blocking FFI calls. -}
+The data types modeling the addressing families, socket options etc, are not complete.
+They mirror what we've needed for our purposes, but please make a fork and open a PR to
+add what you need, and I will gladly merge it.
+
+At some point the hope is that MicroHs will be able to compile all of network, but until
+then, using this library is the quickest work-around.
+-}
 module System.Network
-    ( -- * Re-exports from "Network.Types"
-      module System.Network.Types
-      -- * Operations
+    ( -- * Data types
+      {- | @Socket@s are created by @socket@ or @accept@. When you get them, they are already configured to
+      be non-blocking.-}
+      Socket
+    , Domain(..)
+    , StreamType(..)
+    , SockOpt(..)
+    , SockAddr
+    , mkSockAddr
+
+      -- * Basic operations
     , socket
     , setsocketopt
     , close
@@ -20,10 +35,12 @@ module System.Network
     , bind
     , accept
     , listen
+    -- * Sending data
     , sendBuf
     , sendBufFull
     , sendString
     , sendByteString
+    -- * Receiving data
     , recvBuf
     , recvString
     , recvByteString
@@ -113,7 +130,7 @@ socket d st = do
 #endif
     return (Socket fd)
 
--- | Set a socket option.
+-- | Set a socket option. There should probably be a @getsocketopt@ as well, but there isn't for now.
 setsocketopt :: Socket -> SockOpt -> Int -> IO ()
 #ifdef __MHS__
 setsocketopt (Socket fd) O_NONBLOCK _ =
@@ -160,7 +177,7 @@ connect (Socket fd) sockaddr =
             c_connect fd p (cSizeOf sockaddr)
 #endif
 
--- | Connect, returning 'False' instead of throwing on failure.
+-- | Same as 'connect', but returns @False@ rather than throwing on error.
 connect' :: Socket -> SockAddr -> IO Bool
 connect' (Socket fd) sockaddr =
 #ifdef __MHS__
@@ -186,7 +203,7 @@ bind (Socket fd) sockaddr =
         throwErrnoIfMinus1_ "bind" $
             c_bind fd p (cSizeOf sockaddr)
 
--- | Accept an incoming connection.
+-- | Accept an incoming connection. The returned 'Socket' is already in non-blocking mode.
 accept :: Socket -> IO (Socket, SockAddr)
 accept (Socket serverFd) =
 #ifdef __MHS__
@@ -220,7 +237,7 @@ listen (Socket fd) n =
     throwErrnoIfMinus1_ "listen" $
         c_listen fd (fromIntegral n)
 
--- | Send raw bytes.  Returns the number of bytes actually sent.
+-- | Send raw bytes. Returns the number of bytes that were actually sent.
 sendBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 #ifdef __MHS__
 sendBuf (Socket fd) buf len = go
@@ -239,26 +256,26 @@ sendBuf (Socket fd) buf len =
         return (fromIntegral n)
 #endif
 
--- | Send raw bytes.  Sends the total number of bytes.
+-- | Send raw bytes. Sends the total number of bytes.
 sendBufFull :: Socket -> Ptr Word8 -> Int -> IO ()
 sendBufFull sock ptr len | len == 0 = return ()
                          | otherwise = do
     n <- sendBuf sock ptr len
     sendBufFull sock (plusPtr ptr n) (len - n)
 
--- | Send a 'String' over a socket.
+-- | A helper function that behaves like 'sendBufFull', but which takes a 'String' rather than a pointer to a buffer.
 sendString :: Socket -> String -> IO Int
 sendString sock str =
     withCAStringLen str $ \(ptr, len) ->
         sendBuf sock (castPtr ptr) len
 
--- | Send a 'ByteString' over a socket.
+-- | A helper function that behaves like 'sendBufFull', but which takes a 'ByteString' rather than a pointer to a buffer.
 sendByteString :: Socket -> BS.ByteString -> IO ()
 sendByteString sock bs =
     BS.unsafeUseAsCStringLen bs $ \ (ptr, len) ->
         sendBufFull sock (castPtr ptr) len
 
--- | Receive raw bytes into an existing buffer.  Returns byte count.
+-- | @recvBuf socket buf len@ -- read at most @len@ bytes from @socket@ into @buf@. Returns the number of bytes that was read.
 recvBuf :: Socket -> Ptr Word8 -> Int -> IO Int
 #ifdef __MHS__
 recvBuf (Socket fd) buf len = go
@@ -277,28 +294,28 @@ recvBuf (Socket fd) buf len =
         return (fromIntegral n)
 #endif
 
--- | Receive raw bytes into an existing buffer.  Receives the total number of bytes
+-- | @recvBufFull socket buf len@ -- read exactly len bytes from @socket@ into @buf@.
 recvBufFull :: Socket -> Ptr Word8 -> Int -> IO ()
 recvBufFull sock ptr len | len == 0 = return ()
                          | otherwise = do
     n <- recvBuf sock ptr len
     recvBufFull sock (plusPtr ptr n) (len - n)
 
--- | Receive up to @maxLen@ bytes and decode as a 'String'.
+-- | @recvString socket len@ -- Receive up to @len@ bytes and decode as a 'String'.
 recvString :: Socket -> Int -> IO String
 recvString sock maxLen =
     allocaBytes maxLen $ \buf -> do
         n <- recvBuf sock buf maxLen
         peekCAStringLen (castPtr buf, n)
 
--- | Receive up to @maxLen@ bytes and decode as a 'ByteString'.
+-- | @recvByteString socket len@ -- read at most @len@ bytes and decode as a 'ByteString'.
 recvByteString :: Socket -> Int -> IO BS.ByteString
 recvByteString sock maxLen =
     allocaBytes maxLen $ \buf -> do
         n <- recvBuf sock buf maxLen
         BS.packCStringLen (castPtr buf, n)
 
--- | Receive exactly @len@ bytes and decode as a 'ByteString'.
+-- | @recvByteStringFull socket len@ -- read exactly @len@ bytes and decode as a 'ByteString'.
 recvByteStringFull :: Socket -> Int -> IO BS.ByteString
 recvByteStringFull sock len = do
     buf <- mallocBytes len
