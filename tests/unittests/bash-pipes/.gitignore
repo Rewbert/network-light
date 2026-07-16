@@ -1,5 +1,6 @@
-upper
-countlines
+server
+client
 dist-ghc
 *.hi
 *.o
+*.out
