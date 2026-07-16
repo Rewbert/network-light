@@ -23,7 +23,7 @@ It exists because [MicroHs](https://github.com/augustss/MicroHs) (`mhs`), a smal
 - Sockets are non-blocking by default and integrate correctly with both GHC's I/O manager and MicroHs's cooperative, green-thread concurrency
 - Compiles under GHC and MicroHs, on Linux; a `zephyr` cabal flag selects the differing `sockaddr_in` layout needed for Zephyr RTOS embedded targets
 
-If you need something this package doesn't have yet — IPv6, more socket options, Unix domain sockets, and so on — please fork it, add what you need, and open a pull request. Contributions are very welcome, as long as they keep to the existing style: plain FFI imports, no C stubs unless truly unavoidable, and code that compiles under both GHC and MicroHs.
+If you need something this package doesn't have yet, such as IPv6, more socket options, Unix domain sockets, and so on, please fork it, add what you need, and open a pull request. Contributions are very welcome, as long as they keep to the existing style: plain FFI imports, no C stubs unless truly unavoidable, and code that compiles under both GHC and MicroHs.
 
 ## Installation
 
