@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE CApiFFI #-}
 {- | Non-blocking socket interface.
 
 Under mhs, sockets are set to O_NONBLOCK at creation time and all
@@ -53,22 +54,30 @@ import System.Network.Types
 
 type FD = CInt
 
-foreign import ccall "sys/socket.h socket"     c_socket     :: CInt -> CInt -> CInt -> IO FD
-foreign import ccall "sys/socket.h connect"    c_connect    :: FD   -> Ptr SockAddr -> CInt -> IO CInt
-foreign import ccall "sys/socket.h bind"       c_bind       :: FD   -> Ptr SockAddr -> CInt -> IO CInt
-foreign import ccall "sys/socket.h accept"     c_accept     :: FD   -> Ptr SockAddr -> Ptr CInt -> IO FD
-foreign import ccall "sys/socket.h listen"     c_listen     :: FD   -> CInt -> IO CInt
-foreign import ccall "sys/socket.h send"       c_send       :: FD   -> Ptr Word8 -> CSize -> CInt -> IO CInt
-foreign import ccall "sys/socket.h recv"       c_recv       :: FD   -> Ptr Word8 -> CSize -> CInt -> IO CInt
-foreign import ccall "sys/socket.h setsockopt" c_setsockopt :: FD   -> CInt -> CInt -> Ptr CInt -> CInt -> IO CInt
-foreign import ccall "unistd.h close"          c_close      :: FD   -> IO CInt
+foreign import ccall      "sys/socket.h socket"     c_socket     :: CInt -> CInt -> CInt -> IO FD
+-- connect/accept/send/recv can block for an unbounded time (waiting on
+-- a peer), so they're "safe": under GHC with -threaded, a safe call
+-- runs on its own OS thread instead of blocking the whole capability,
+-- so other Haskell threads (e.g. forkIO'd connection handlers) keep
+-- running. A single capability is enough -- no +RTS -N2 needed. mhs
+-- accepts the same "safe" keyword but doesn't need it: its own
+-- concurrency comes from non-blocking sockets plus waitForReadFD /
+-- waitForWriteFD, independent of this annotation.
+foreign import ccall safe "sys/socket.h connect"    c_connect    :: FD   -> Ptr SockAddr -> CInt -> IO CInt
+foreign import ccall      "sys/socket.h bind"       c_bind       :: FD   -> Ptr SockAddr -> CInt -> IO CInt
+foreign import ccall safe "sys/socket.h accept"     c_accept     :: FD   -> Ptr SockAddr -> Ptr CInt -> IO FD
+foreign import ccall      "sys/socket.h listen"     c_listen     :: FD   -> CInt -> IO CInt
+foreign import ccall safe "sys/socket.h send"       c_send       :: FD   -> Ptr Word8 -> CSize -> CInt -> IO CInt
+foreign import ccall safe "sys/socket.h recv"       c_recv       :: FD   -> Ptr Word8 -> CSize -> CInt -> IO CInt
+foreign import ccall      "sys/socket.h setsockopt" c_setsockopt :: FD   -> CInt -> CInt -> Ptr CInt -> CInt -> IO CInt
+foreign import ccall      "unistd.h close"          c_close      :: FD   -> IO CInt
 
 #ifdef __MHS__
 foreign import ccall "fcntl.h fcntl" c_fcntl :: CInt -> CInt -> CInt -> IO CInt
 foreign import ccall "sys/socket.h getsockopt" c_getsockopt :: CInt -> CInt -> CInt -> Ptr CInt -> Ptr CInt -> IO CInt
 
-foreign import ccall "fcntl.h value F_SETFL"    f_SETFL :: CInt
-foreign import ccall "fcntl.h value O_NONBLOCK" o_NONBLOCK :: CInt
+foreign import capi "fcntl.h value F_SETFL"    f_SETFL :: CInt
+foreign import capi "fcntl.h value O_NONBLOCK" o_NONBLOCK :: CInt
 
 fdInt :: CInt -> Int
 fdInt = fromIntegral
@@ -82,11 +91,11 @@ peekSockError fd =
         peek errPtr
 #endif
 
-foreign import ccall "sys/socket.h value SOL_SOCKET"   sOL_SOCKET   :: CInt
-foreign import ccall "sys/socket.h value SO_REUSEADDR" sO_REUSEADDR :: CInt
-foreign import ccall "sys/socket.h value SO_DEBUG"     sO_DEBUG     :: CInt
-foreign import ccall "sys/socket.h value SO_TYPE"      sO_TYPE      :: CInt
-foreign import ccall "sys/socket.h value SO_ERROR"     sO_ERROR     :: CInt
+foreign import capi "sys/socket.h value SOL_SOCKET"   sOL_SOCKET   :: CInt
+foreign import capi "sys/socket.h value SO_REUSEADDR" sO_REUSEADDR :: CInt
+foreign import capi "sys/socket.h value SO_DEBUG"     sO_DEBUG     :: CInt
+foreign import capi "sys/socket.h value SO_TYPE"      sO_TYPE      :: CInt
+foreign import capi "sys/socket.h value SO_ERROR"     sO_ERROR     :: CInt
 
 
 -- ---------------------------------------------------------------------------
@@ -294,4 +303,8 @@ recvByteStringFull :: Socket -> Int -> IO BS.ByteString
 recvByteStringFull sock len = do
     buf <- mallocBytes len
     recvBufFull sock buf len
+#ifdef __MHS__
     BS.unsafePackMallocCStringLen (castPtr buf) len
+#else
+    BS.unsafePackMallocCStringLen (castPtr buf, len)
+#endif

@@ -1,5 +1,18 @@
+{-# LANGUAGE CPP #-}
 -- | Shared types, instances, and pure helpers used by both
 -- "Network.Blocking" and "Network.NonBlocking".
+--
+-- Two values here describe the platform @struct sockaddr_in@ ABI and differ
+-- between Linux and Zephyr.  They are selected with the @ZEPHYR@ CPP macro,
+-- which the Zephyr build passes via @mhs -XCPP -DZEPHYR@ (plain @__MHS__@ is
+-- defined on both targets and so cannot tell them apart):
+--
+--   * @AF_INET@: 2 on Linux, 1 (@NET_AF_INET@) on Zephyr.
+--   * @sizeof(struct sockaddr_in)@: 16 on Linux (8 + @sin_zero@), 8 on Zephyr
+--     (@net_sockaddr_in@ has no padding).
+--
+-- The field order and endianness are identical on both, so 'peekSockAddr' is
+-- platform-neutral.
 module System.Network.Types
     ( Socket(..)
     , Domain(..)
@@ -30,9 +43,15 @@ data Domain
     -- more families can be added here
 
 instance Enum Domain where
+#if defined(ZEPHYR)
+    toEnum 1 = AF_INET
+    toEnum _ = error "Domain.toEnum: unrecognised value"
+    fromEnum AF_INET = 1
+#else
     toEnum 2 = AF_INET
     toEnum _ = error "Domain.toEnum: unrecognised value"
     fromEnum AF_INET = 2
+#endif
 
 -- | Socket stream type.
 data StreamType
@@ -67,19 +86,28 @@ data SockOpt
 -- ---------------------------------------------------------------------------
 
 instance Storable SockAddr where
+#if defined(ZEPHYR)
+    sizeOf    _ = 8
+#else
     sizeOf    _ = 16
+#endif
     alignment _ = 16
     peek        = peekSockAddr
     poke        = pokeSockAddr
 
 -- | Serialise a 'SockAddr' into a @struct sockaddr_in@ laid out in memory.
--- Only 'AF_INET' is supported; the @sin_family@ field is hard-coded to @2@.
+-- Only 'AF_INET' is supported; the @sin_family@ field is set per platform
+-- (see the module header for the @ZEPHYR@ macro).
 pokeSockAddr :: Ptr SockAddr -> SockAddr -> IO ()
 pokeSockAddr p (SockAddrInet port address) =
     pokeArray (castPtr p) (sin_family ++ sin_port ++ sin_addr)
   where
     sin_family :: [Word8]
+#if defined(ZEPHYR)
+    sin_family = [0x01, 0x00]
+#else
     sin_family = [0x02, 0x00]
+#endif
 
     sin_port :: [Word8]
     sin_port =
