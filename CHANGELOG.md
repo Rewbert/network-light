@@ -23,3 +23,7 @@
 
 * Made it work with GHC again, and added some tests.
 * Worked on the Haddock documentation, before eventually putting it on Hackage.
+
+## 0.1.0.6 -- 2026-08-06
+
+* Verified that it works with a bunch more GHC cmopilers.

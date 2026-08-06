@@ -1,8 +1,8 @@
 cabal-version:      3.0
 name:               network-light
-version:            0.1.0.5
+version:            0.1.0.6
 synopsis:           A slimmed down version of network
-description:        A slimmed down version of network, that works with both GHC and MHS. Very incomplete -- pull-requests welcome.
+description:        A slimmed down version of network, that works with both GHC and MHS.
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Robert Krook
@@ -11,12 +11,29 @@ copyright:          2025 Robert Krook
 category:           Network
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
+                    README.md
+extra-source-files: examples/*.hs
+                    tests/Makefile
+                    tests/unittests/**/*.hs
+                    tests/unittests/bash-pipes/Makefile
+                    tests/unittests/concurrent-clients/Makefile
+                    tests/unittests/connect-closed-port/Makefile
+                    tests/unittests/hello-world/Makefile
+                    tests/unittests/send-string/Makefile
+                    tests/unittests/so-reuseaddr-churn/Makefile
 bug-reports:        https://github.com/Rewbert/network-light/issues
-tested-with:        GHC ==9.10.3
+tested-with:        GHC ==9.4.8
+                     || ==9.6.7
+                     || ==9.8.1
+                     || ==9.8.2
+                     || ==9.8.4
+                     || ==9.10.1
+                     || ==9.10.2
+                     || ==9.10.3
                      || ==9.12.2
-                     || ==9.14.1
+                     || ==9.12.4
+                     || ==9.14.1,
                     MHS ==0.16.4.0
--- extra-source-files:
 
 source-repository head
   type:     git
@@ -37,13 +54,14 @@ library
     -- other-extensions:
     if flag(zephyr)
         cpp-options: -DZEPHYR
-    build-depends:    base >=4.20 && <5, bytestring >=0.12.2.0 && <0.13
+    build-depends:    base >=4.17 && <5, bytestring >=0.12.2.0 && <0.13
     hs-source-dirs:   src
     default-language: Haskell2010
 
 Test-Suite test-sockaddr-storable
     type: exitcode-stdio-1.0
     Default-language: Haskell2010
-    hs-source-dirs: test/Network
+    hs-source-dirs: test/Network, src
     main-is: SockAddr.hs
-    build-depends: base, network-light, QuickCheck
+    other-modules: System.Network.Types
+    build-depends: base >=4.17 && <5, network-light, QuickCheck

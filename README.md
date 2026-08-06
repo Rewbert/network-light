@@ -92,8 +92,6 @@ make test HC=ghc   # GHC only
 make test HC=mhs   # MicroHs only
 ```
 
-Tested with GHC 9.10.3, 9.12.2, and 9.14.1 (see `tested-with` in the `.cabal` file), and with MicroHs 0.16.4.0.
-
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
