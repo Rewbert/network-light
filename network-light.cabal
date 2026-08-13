@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               network-light
-version:            0.1.0.6
+version:            0.1.0.7
 synopsis:           A slimmed down version of network
 description:        A slimmed down version of network, that works with both GHC and MHS.
 license:            Apache-2.0
@@ -34,6 +34,7 @@ tested-with:        GHC ==9.4.8
                      || ==9.12.4
                      || ==9.14.1,
                     MHS ==0.16.4.0
+                     || ==0.16.6.0
 
 source-repository head
   type:     git

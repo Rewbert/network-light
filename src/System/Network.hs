@@ -23,7 +23,7 @@ module System.Network
     , Domain(..)
     , StreamType(..)
     , SockOpt(..)
-    , SockAddr
+    , SockAddr(..)
     , mkSockAddr
 
       -- * Basic operations

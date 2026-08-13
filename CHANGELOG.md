@@ -27,3 +27,8 @@
 ## 0.1.0.6 -- 2026-08-06
 
 * Verified that it works with a bunch more GHC cmopilers.
+
+## 0.1.0.7 -- 2026-08-13
+
+* Fix: `System.Network` exported `SockAddr` without its `SockAddrInet` constructor, so downstream code could construct addresses via `mkSockAddr` but never destruct them.
+* Ensure compatibility with MHS version 0.16.6.0
